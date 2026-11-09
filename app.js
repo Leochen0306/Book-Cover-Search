@@ -73,7 +73,14 @@
     const start = cleaned.indexOf("{");
     const end = cleaned.lastIndexOf("}");
     if (start < 0 || end <= start) throw new Error("AI 回傳的內容不是 JSON：\n" + text.slice(0, 300));
-    return JSON.parse(cleaned.slice(start, end + 1));
+    const raw = cleaned.slice(start, end + 1);
+    try { return JSON.parse(raw); }
+    catch (e) {
+      // 簡單修復：移除結尾多餘逗號、把中文引號外的智慧引號換掉
+      const fixed = raw.replace(/,\s*([}\]])/g, "$1").replace(/[“”]/g, "\\\"");
+      try { return JSON.parse(fixed); }
+      catch { throw new Error("AI 回傳的 JSON 格式有誤，請再按一次「辨識並產生心智圖」。(" + e.message + ")"); }
+    }
   };
 
   // ---------- 圖片處理 ----------
@@ -119,16 +126,19 @@
    * 若使用網路搜尋（server tool）時回傳 pause_turn，會自動接續直到完成。
    * 回傳 { text, sources }。
    */
-  async function callClaude({ system, content, tools, maxTokens = 4096 }) {
+  async function callClaude({ system, content, tools, toolChoice, maxTokens = 4096 }) {
     if (!settings.apiKey) throw new Error("請先到「⚙️ 設定」輸入 Claude API 金鑰。");
     const messages = [{ role: "user", content }];
     const textParts = [];
     const sources = new Map();
+    let toolInput = null;
+    let stopReason = "";
 
     for (let round = 0; round < 6; round++) {
       const body = { model: settings.model, max_tokens: maxTokens, messages };
       if (system) body.system = system;
       if (tools) body.tools = tools;
+      if (toolChoice) body.tool_choice = toolChoice;
 
       let res;
       try {
@@ -162,6 +172,8 @@
           for (const c of block.citations || []) {
             if (c.url) sources.set(c.url, c.title || c.url);
           }
+        } else if (block.type === "tool_use") {
+          toolInput = block.input;
         } else if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
           for (const r of block.content) {
             if (r.url && !sources.has(r.url)) sources.set(r.url, r.title || r.url);
@@ -171,6 +183,7 @@
         }
       }
 
+      stopReason = data.stop_reason;
       if (data.stop_reason === "pause_turn") {
         // 長時間的伺服器端工具呼叫被暫停 → 把目前內容送回去讓它繼續
         messages.push({ role: "assistant", content: data.content });
@@ -178,12 +191,24 @@
       }
       break;
     }
-    return { text: textParts.join(""), sources };
+    return { text: textParts.join(""), sources, toolInput, stopReason };
+  }
+
+  /** 以「強制工具呼叫」取得結構化 JSON（由 API 保證格式正確），失敗時退回解析文字 */
+  async function callForJson({ system, content, toolName, description, schema, maxTokens }) {
+    const r = await callClaude({
+      system, content, maxTokens,
+      tools: [{ name: toolName, description, input_schema: schema }],
+      toolChoice: { type: "tool", name: toolName },
+    });
+    if (r.stopReason === "max_tokens") throw new Error("AI 回覆太長被截斷，請再試一次（或在設定改用其他模型）。");
+    if (r.toolInput && typeof r.toolInput === "object") return r.toolInput;
+    return parseJson(r.text);
   }
 
   // ---------- 步驟 1：辨識封面 ----------
   async function identifyBook() {
-    const system = "你是專業的圖書館員，擅長從書本封面辨識書籍資訊。只輸出 JSON，不要任何其他文字。";
+    const system = "你是專業的圖書館員，擅長從書本封面辨識書籍資訊。";
     const prompt = `請仔細辨識這張書本封面照片，輸出以下 JSON：
 {
   "title": "書名（照封面上的文字，含副標題）",
@@ -197,15 +222,27 @@
   "confidence": 0 到 1 之間的數字,
   "is_book_cover": true 或 false
 }`;
-    const { text } = await callClaude({
+    const str = { type: "string" };
+    const info = await callForJson({
       system,
-      maxTokens: 1024,
+      maxTokens: 1500,
+      toolName: "save_book_info",
+      description: "儲存從封面辨識出的書籍資訊",
+      schema: {
+        type: "object",
+        properties: {
+          title: str, original_title: str,
+          authors: { type: "array", items: str }, translators: { type: "array", items: str },
+          publisher: str, language: str, isbn: str, other_text: str,
+          confidence: { type: "number" }, is_book_cover: { type: "boolean" },
+        },
+        required: ["title", "authors", "is_book_cover"],
+      },
       content: [
         { type: "image", source: { type: "base64", media_type: state.image.mediaType, data: state.image.base64 } },
-        { type: "text", text: prompt },
+        { type: "text", text: prompt + "\n\n請用 save_book_info 工具回傳結果。" },
       ],
     });
-    const info = parseJson(text);
     if (info.is_book_cover === false) {
       throw new Error("這張圖片看起來不像書本封面，請換一張更清楚的封面照片。");
     }
@@ -271,7 +308,7 @@ ${book.publisher ? "出版社：" + book.publisher : ""}${book.other_text ? "\n�
 
   // ---------- 步驟 3：擷取知識節點 ----------
   async function extractNodes(book, notes) {
-    const system = "你是知識架構師，擅長把一本書的內容整理成清楚、有層次的心智圖。只輸出 JSON。";
+    const system = "你是知識架構師，擅長把一本書的內容整理成清楚、有層次的心智圖。";
     const prompt = `以下是關於《${book.title}》的研究筆記。請擷取這本書的「知識節點」並組織成心智圖，使用${settings.lang}。
 
 規則：
@@ -296,8 +333,28 @@ ${book.publisher ? "出版社：" + book.publisher : ""}${book.other_text ? "\n�
 """
 ${notes}
 """`;
-    const { text } = await callClaude({ system, maxTokens: 4096, content: [{ type: "text", text: prompt }] });
-    const tree = parseJson(text);
+    const leaf = { type: "object", properties: { name: { type: "string" }, note: { type: "string" } }, required: ["name"] };
+    const node = (children) => ({
+      type: "object",
+      properties: { name: { type: "string" }, note: { type: "string" }, children: { type: "array", items: children } },
+      required: ["name"],
+    });
+    const tree = await callForJson({
+      system,
+      maxTokens: 8000,
+      toolName: "save_mindmap",
+      description: "儲存整理好的書籍知識心智圖",
+      schema: {
+        type: "object",
+        properties: {
+          summary: { type: "string" },
+          root: { type: "string" },
+          branches: { type: "array", items: node(node(leaf)) },
+        },
+        required: ["summary", "root", "branches"],
+      },
+      content: [{ type: "text", text: prompt + "\n\n請用 save_mindmap 工具回傳結果。" }],
+    });
     if (!Array.isArray(tree.branches) || !tree.branches.length) throw new Error("AI 沒有擷取到知識節點，請再試一次。");
     return tree;
   }
