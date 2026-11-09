@@ -1,0 +1,170 @@
+:root {
+  --paper: #f7f3ea;
+  --card: #fffdf8;
+  --ink: #2b2620;
+  --muted: #7a7064;
+  --line: #e4dccd;
+  --accent: #b5532f;
+  --accent-soft: #f3e1d6;
+  --ok: #3f7d4f;
+  --err: #b3261e;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 6px 24px rgba(60, 40, 20, .06);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body { margin: 0; }
+
+body {
+  font-family: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2 { font-family: "Noto Serif TC", serif; margin: 0; }
+h1 { font-size: 1.35rem; }
+h2 { font-size: 1.05rem; margin-bottom: .75rem; }
+
+a { color: var(--accent); }
+
+.muted { color: var(--muted); }
+.small { font-size: .82rem; font-weight: 400; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.brand { display: flex; gap: 12px; align-items: center; }
+.logo { font-size: 1.9rem; }
+.tagline { margin: 0; color: var(--muted); font-size: .85rem; }
+
+/* ---------- Layout ---------- */
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) 1fr;
+  gap: 20px;
+  padding: 20px 24px;
+}
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; padding: 14px; }
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+.input-panel { display: flex; flex-direction: column; gap: 14px; align-self: start; }
+
+/* ---------- Buttons ---------- */
+button {
+  font: inherit; cursor: pointer;
+  border-radius: 10px; padding: 9px 14px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+button.primary:not(:disabled):hover { background: #9b4526; }
+button.secondary { background: var(--accent-soft); border-color: #e8c7b5; color: #7d3519; }
+button.ghost:not(:disabled):hover { background: #f4efe5; }
+
+/* ---------- Drop zone ---------- */
+.drop-zone {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 240px;
+  border: 2px dashed #d6c9b3; border-radius: var(--radius);
+  background: #fbf8f1;
+  cursor: pointer; overflow: hidden; text-align: center;
+  transition: border-color .15s, background .15s;
+}
+.drop-zone.drag { border-color: var(--accent); background: var(--accent-soft); }
+.drop-zone img { max-width: 100%; max-height: 360px; display: block; }
+.drop-hint { padding: 20px; }
+.big { font-size: 2.4rem; }
+
+/* ---------- Steps ---------- */
+.steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: .92rem; }
+.steps li { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.steps .dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid #cfc3ae; flex: none;
+}
+.steps li.active { color: var(--ink); font-weight: 500; }
+.steps li.active .dot { border-color: var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+.steps li.done { color: var(--ok); }
+.steps li.done .dot { background: var(--ok); border-color: var(--ok); }
+.steps li.fail { color: var(--err); }
+.steps li.fail .dot { background: var(--err); border-color: var(--err); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.status { font-size: .88rem; min-height: 1.2em; white-space: pre-wrap; }
+.status.error { color: var(--err); }
+
+/* ---------- Book card ---------- */
+.book-card label, .settings label {
+  display: grid; gap: 4px; font-size: .85rem; color: var(--muted); margin-bottom: 10px;
+}
+input[type=text], input[type=password], input[type=number], select, textarea {
+  font: inherit; color: var(--ink);
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+}
+.book-meta { font-size: .85rem; color: var(--muted); margin-bottom: 10px; display: flex; gap: 10px; }
+.book-meta img { width: 56px; border-radius: 4px; box-shadow: var(--shadow); }
+
+/* ---------- Sources ---------- */
+.sources ul { margin: 0; padding-left: 18px; font-size: .85rem; }
+.sources li { margin-bottom: 4px; word-break: break-all; }
+
+/* ---------- Map ---------- */
+.map-panel { display: flex; flex-direction: column; min-height: 70vh; }
+.map-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.map-toolbar h2 { margin: 0; }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.tools button { padding: 6px 10px; font-size: .85rem; }
+
+.summary {
+  background: #fbf8f1; border-left: 4px solid var(--accent);
+  padding: 10px 14px; border-radius: 8px; font-size: .92rem; margin-bottom: 10px;
+}
+
+.map-wrap {
+  position: relative; flex: 1; min-height: 520px;
+  border: 1px solid var(--line); border-radius: 10px; background: #fff;
+}
+#mindmap { position: absolute; inset: 0; width: 100%; height: 100%; }
+.map-empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center; color: var(--muted);
+  pointer-events: none;
+}
+
+.editor { margin-top: 12px; display: grid; gap: 8px; }
+.editor textarea { min-height: 260px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; }
+
+/* ---------- Dialog ---------- */
+dialog {
+  border: none; border-radius: var(--radius); padding: 0;
+  width: min(480px, 92vw); box-shadow: 0 20px 60px rgba(0,0,0,.25);
+}
+dialog::backdrop { background: rgba(40, 30, 20, .4); }
+.settings { padding: 22px; }
+.settings label.check { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+.foot {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 12px 24px; font-size: .8rem; border-top: 1px solid var(--line);
+}
