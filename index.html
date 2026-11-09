@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>書封知識心智圖 Book Cover Search</title>
+  <meta name="description" content="上傳書本封面照片，AI 辨識書籍、上網搜尋介紹並擷取知識節點，自動產生心智圖。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">📖</span>
+      <div>
+        <h1>書封知識心智圖</h1>
+        <p class="tagline">拍一張封面，看懂一本書的知識結構</p>
+      </div>
+    </div>
+    <button id="settingsBtn" class="ghost" type="button">⚙️ 設定</button>
+  </header>
+
+  <main class="layout">
+    <!-- 左欄：輸入與流程 -->
+    <section class="panel input-panel">
+      <h2>① 上傳書本封面</h2>
+      <label id="dropZone" class="drop-zone" for="fileInput">
+        <img id="preview" alt="封面預覽" hidden />
+        <div id="dropHint" class="drop-hint">
+          <div class="big">📷</div>
+          <div>點此拍照 / 選擇圖片</div>
+          <div class="muted">或將圖片拖曳到這裡（也可直接 Ctrl+V 貼上）</div>
+        </div>
+      </label>
+      <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
+
+      <button id="runBtn" class="primary" type="button" disabled>🔍 辨識並產生心智圖</button>
+
+      <ol id="steps" class="steps">
+        <li data-step="identify"><span class="dot"></span>辨識封面上的書名與作者</li>
+        <li data-step="search"><span class="dot"></span>上網搜尋書籍介紹</li>
+        <li data-step="extract"><span class="dot"></span>擷取知識節點</li>
+        <li data-step="render"><span class="dot"></span>繪製心智圖</li>
+      </ol>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+
+      <div id="bookCard" class="book-card" hidden>
+        <h2>② 辨識結果 <span class="muted small">（可修改後重新搜尋）</span></h2>
+        <label>書名<input id="bookTitle" type="text" /></label>
+        <label>作者<input id="bookAuthor" type="text" /></label>
+        <label>出版社 / 其他線索<input id="bookExtra" type="text" /></label>
+        <div id="bookMeta" class="book-meta"></div>
+        <button id="researchBtn" class="secondary" type="button">↻ 用這個書名重新搜尋</button>
+      </div>
+
+      <div id="sourcesBox" class="sources" hidden>
+        <h2>③ 參考來源</h2>
+        <ul id="sourcesList"></ul>
+      </div>
+    </section>
+
+    <!-- 右欄：心智圖 -->
+    <section class="panel map-panel">
+      <div class="map-toolbar">
+        <h2>④ 知識心智圖</h2>
+        <div class="tools">
+          <button id="fitBtn" class="ghost" type="button" disabled>⤢ 置中</button>
+          <button id="editBtn" class="ghost" type="button" disabled>✏️ 編輯</button>
+          <button id="pngBtn" class="ghost" type="button" disabled>⬇ PNG</button>
+          <button id="svgBtn" class="ghost" type="button" disabled>⬇ SVG</button>
+          <button id="mdBtn" class="ghost" type="button" disabled>⬇ Markdown</button>
+        </div>
+      </div>
+      <div id="summary" class="summary" hidden></div>
+      <div class="map-wrap">
+        <svg id="mindmap"></svg>
+        <div id="mapEmpty" class="map-empty">
+          <div class="big">🧠</div>
+          <p>心智圖會出現在這裡。<br />點擊節點可收合／展開，滾輪可縮放。</p>
+        </div>
+      </div>
+      <div id="editor" class="editor" hidden>
+        <p class="muted small">以 Markdown 標題與清單編輯節點（# 為中心主題，## 為主分支，- 為子節點），修改後按「更新心智圖」。</p>
+        <textarea id="mdText" spellcheck="false"></textarea>
+        <button id="applyMdBtn" class="secondary" type="button">更新心智圖</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- 設定對話框 -->
+  <dialog id="settingsDlg">
+    <form method="dialog" class="settings">
+      <h2>⚙️ 設定</h2>
+      <label>Claude API 金鑰
+        <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off" />
+      </label>
+      <p class="muted small">金鑰只儲存在你這台電腦的瀏覽器（localStorage），由瀏覽器直接呼叫 Anthropic API，不會經過其他伺服器。可在 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Claude Console</a> 申請；需在 Console 中啟用網頁搜尋（Web search）。</p>
+      <label>模型
+        <select id="model">
+          <option value="claude-sonnet-5-5">Claude Sonnet 5.5（建議，速度與品質平衡）</option>
+          <option value="claude-opus-5-5">Claude Opus 5.5（品質最好，較慢較貴）</option>
+          <option value="claude-haiku-5-5">Claude Haiku 5.5（最快最便宜）</option>
+        </select>
+      </label>
+      <label>心智圖語言
+        <select id="lang">
+          <option value="繁體中文">繁體中文</option>
+          <option value="English">English</option>
+          <option value="與書本相同的語言">與書本相同的語言</option>
+        </select>
+      </label>
+      <label>網路搜尋次數上限
+        <input id="maxSearch" type="number" min="1" max="10" value="5" />
+      </label>
+      <label class="check"><input id="useGoogleBooks" type="checkbox" checked /> 同時查詢 Google Books 書目資料</label>
+      <div class="dlg-actions">
+        <button value="cancel" class="ghost">取消</button>
+        <button id="saveSettings" value="save" class="primary">儲存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer class="foot">
+    <span>丕楷 AI 增能專案 · Book Cover Search</span>
+    <span class="muted">AI 產生的內容可能有誤，請以原書為準。</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12/dist/browser/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12/dist/browser/index.iife.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
