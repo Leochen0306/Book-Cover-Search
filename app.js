@@ -5,6 +5,7 @@
  */
 (() => {
   "use strict";
+  const APP_VERSION = "1.3";
 
   // ---------- 設定 ----------
   const API_URL = "https://api.anthropic.com/v1/messages";
@@ -194,24 +195,11 @@
     return { text: textParts.join(""), sources, toolInput, stopReason };
   }
 
-  const noForcedTool = new Set();
-  /** 以「強制工具呼叫」取得結構化 JSON（由 API 保證格式正確），失敗時退回解析文字 */
+  /** 以工具呼叫取得結構化 JSON，若模型改用文字回覆則解析文字 */
   async function callForJson({ system, content, toolName, description, schema, maxTokens }) {
     const tools = [{ name: toolName, description, input_schema: schema }];
-    let r;
-    if (noForcedTool.has(settings.model)) {
-      r = await callClaude({ system, content, maxTokens, tools });
-    } else {
-      try {
-        r = await callClaude({ system, content, maxTokens, tools, toolChoice: { type: "tool", name: toolName } });
-      } catch (e) {
-        // 部分模型不支援強制指定工具 → 改由模型自行呼叫工具（auto），並記住這個模型
-        if (e.status === 400 && /tool_choice/i.test(e.message)) {
-          noForcedTool.add(settings.model);
-          r = await callClaude({ system, content, maxTokens, tools });
-        } else throw e;
-      }
-    }
+    // 不使用強制 tool_choice（部分模型不支援），改由提示詞要求模型呼叫工具
+    const r = await callClaude({ system, content, maxTokens, tools });
     if (r.stopReason === "max_tokens") throw new Error("AI 回覆太長被截斷，請再試一次（或在設定改用其他模型）。");
     if (r.toolInput && typeof r.toolInput === "object") return r.toolInput;
     return parseJson(r.text);
@@ -620,6 +608,8 @@ ${notes}
   el.pngBtn.addEventListener("click", exportPng);
   window.addEventListener("resize", () => state.mm?.fit());
 
+  const ver = document.getElementById("appVersion");
+  if (ver) ver.textContent = "v" + APP_VERSION;
   if (!settings.apiKey) setStatus("第一次使用請先按右上角「⚙️ 設定」輸入 Claude API 金鑰。");
 
   // 供測試使用
